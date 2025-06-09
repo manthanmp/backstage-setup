@@ -1,0 +1,134 @@
+# /backstage-setup/templates/microservice-with-ci-api/template.yaml
+
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: microservice-with-ci-api
+  title: Microservice with CI/CD & API
+  description: Creates a new microservice with a GitHub repo, Jenkins pipeline, and API registration in the catalog.
+  tags:
+    - service
+    - microservice
+    - github
+    - jenkins
+    - api
+spec:
+  owner: user:guest # Default owner for the created component
+  type: service    # Type of the entity being created
+
+  parameters:
+    - title: Basic Information
+      required:
+        - componentId
+        - description
+        - owner
+      properties:
+        componentId:
+          title: Component Name
+          type: string
+          description: Unique ID for your new service (e.g., 'my-awesome-service').
+          ui:autofocus: true
+          ui:options:
+            rows: 1
+        description:
+          title: Description
+          type: string
+          description: A brief description of your new service.
+        owner:
+          title: Owner
+          type: string
+          description: The team or individual owning this service.
+          ui:field: OwnerPicker # Provides a nice dropdown for selecting existing users/groups
+          ui:options:
+            allowedKinds: ['Group', 'User']
+
+    - title: Repository Details
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker # Specific UI for GitHub repository selection
+          ui:options:
+            allowedHosts: ['github.com'] # Restrict to github.com
+
+    - title: Jenkins Configuration
+      required:
+        - jenkinsJobName
+      properties:
+        jenkinsJobName:
+          title: Jenkins Job Name
+          type: string
+          description: Name for the Jenkins CI/CD job (e.g., 'ci-my-service').
+          default: 'ci-${{ parameters.componentId }}' # Pre-fill with a common pattern based on component ID
+
+    - title: API Definition
+      required:
+        - apiName
+      properties:
+        apiName:
+          title: API Name
+          type: string
+          description: Name for the API (e.g., 'my-service-api').
+          default: '${{ parameters.componentId }}-api' # Pre-fill with a common pattern based on component ID
+
+  steps:
+    - id: fetch-base
+      name: Fetch Base Template
+      action: fetch:template
+      input:
+        url: ./content # Points to the 'content' directory located alongside this template.yaml
+        values:
+          # Pass all necessary parameters to the Nunjucks templating engine for 'content' files
+          componentId: ${{ parameters.componentId }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          jenkinsJobName: ${{ parameters.jenkinsJobName }}
+          apiName: ${{ parameters.apiName }}
+
+    - id: publish-github
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }} # The URL provided by the user via RepoUrlPicker
+        description: This is ${{ parameters.description }}
+        defaultBranch: 'main'
+        # Optional: Set repository visibility. Defaults to 'public'.
+        # repoVisibility: 'public' # or 'private' or 'internal'
+
+    - id: create-jenkins-job
+      name: Create Jenkins Job
+      action: jenkins:job:create
+      input:
+        jobName: ${{ parameters.jenkinsJobName }}
+        # This path is relative to the *root of the newly created GitHub repository*
+        configPath: './jenkins/config.xml'
+
+    - id: register-component
+      name: Register Component in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github'].output.repoContentsUrl }}
+        # This path is relative to the *root of the newly created GitHub repository*
+        catalogInfoPath: '/catalog-info.yaml'
+
+    - id: register-api
+      name: Register API in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github'].output.repoContentsUrl }}
+        # This path is relative to the *root of the newly created GitHub repository*
+        catalogInfoPath: '/api/openapi.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish-github'].output.repoUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: default/component/${{ parameters.componentId }}
+      - title: Jenkins Job
+        icon: ci
+        # IMPORTANT: Adjust this URL to match your actual Jenkins instance's base URL and job structure
+        url: http://localhost:8080/job/${{ parameters.jenkinsJobName }}

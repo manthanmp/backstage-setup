@@ -1,0 +1,18 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ parameters.componentId }}
+  description: ${{ parameters.description }}
+  annotations:
+    # Link to the GitHub repository where the code resides
+    backstage.io/source-location: url:${{ steps['publish-github'].output.repoUrl }}
+    # Link to TechDocs if you plan to generate docs from this repo
+    backstage.io/techdocs-ref: url:${{ steps['publish-github'].output.repoUrl }}
+    # Link to your Jenkins job in the catalog
+    # IMPORTANT: Adjust 'your-jenkins-instance-name' if you have multiple Jenkins instances
+    jenkins.io/job-full-name: ${{ parameters.jenkinsJobName }}
+spec:
+  type: service
+  lifecycle: experimental # Or development, production, etc.
+  owner: ${{ parameters.owner }}
+  system: default # Or a specific system name if applicable
